@@ -37,8 +37,11 @@ def main():
   current_dir = os.path.dirname(os.path.abspath(__file__))
   repo_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
   extra_deps_path = os.path.join(current_dir, "post_train_deps.txt")
+  overrides_deps_path = os.path.join(current_dir, "post_train_overrides.txt")
   if not os.path.exists(extra_deps_path):
     raise FileNotFoundError(f"Dependencies file not found at {extra_deps_path}")
+  if not os.path.exists(overrides_deps_path):
+    raise FileNotFoundError(f"Overrides file not found at {overrides_deps_path}")
 
   # Check if 'uv' is available in the environment
   try:
@@ -48,6 +51,17 @@ def main():
     print(f"Error checking uv version: {e}")
     print(f"Stderr: {e.stderr.decode()}")
     sys.exit(1)
+
+  overrides_command = [
+      sys.executable,  # Use the current Python executable's pip to ensure the correct environment
+       "-m",
+      "uv",
+      "pip",
+      "install",
+      "-r",
+      str(overrides_deps_path),
+      "--force-reinstall",
+  ]
 
   command = [
       sys.executable,  # Use the current Python executable's pip to ensure the correct environment
@@ -71,6 +85,10 @@ def main():
   ]
 
   try:
+    print(f"Installing overrides: {' '.join(overrides_command)}")
+    _ = subprocess.run(overrides_command, check=True, capture_output=True, text=True)
+    print("Overrides installed successfully!")
+
     # Run the command to install Github dependencies
     print(f"Installing extra dependencies: {' '.join(command)}")
     _ = subprocess.run(command, check=True, capture_output=True, text=True)
