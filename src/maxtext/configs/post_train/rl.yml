@@ -148,6 +148,7 @@ generation_configs:
 num_eval_passes: 1 # Number of generation passes during evaluation
 eval_corr_lst: False # If True, only include correct responses in the list during evaluation
 eval_make_lst: False # If True, return a list of (question, answer, responses) during evaluation
+eval_mode: "pass" # Evaluation mode ("pass" for pass@K, "maj" for majority voting maj@K, "pass_at_1" for pass@1 estimation)
 
 # ====== Inference ======
 # === Generation during GRPO training ===
@@ -190,6 +191,12 @@ reward_ratio_guess_to_answer_low: 0.0
 penalty_incorrect_format: 0.0
 penalty_incorrect_answer: 0.0
 
+# ====== Configuration for math_verify Pool ======
+# Timeout (seconds) for math_verify
+math_verify_timeout: 300
+# Max worker processes for the math_verify pool. null ⇒ min(batch_size, cpu_count())
+math_verify_num_procs: null
+
 # ====== Special tokens/templates for GSM8K reasoning ======
 reasoning_start_token: '<reasoning>'
 reasoning_end_token: '</reasoning>'
@@ -200,8 +207,8 @@ skip_jax_distributed_system: True
 
 # # TODO(@mazumdera): fix this
 # Dataset Configuration
-dataset_name: 'gsm8k' # huggingface:open-r1/DAPO-Math-17k-Processed
-eval_dataset_name: 'gsm8k' # huggingface:BytedTsinghua-SIA/AIME-2024
+dataset_name: 'gsm8k' # open-r1/DAPO-Math-17k-Processed
+eval_dataset_name: 'gsm8k' # BytedTsinghua-SIA/AIME-2024
 train_split: 'train'
 eval_split: 'test'
 tokenizer_type: 'huggingface'
