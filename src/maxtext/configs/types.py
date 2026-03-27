@@ -1520,6 +1520,15 @@ class Goodput(BaseModel):
   enable_gcp_step_deviation_metrics: bool = Field(True, description="Enable GCP step deviation metrics.")
 
 
+class ElasticTraining(BaseModel):
+  """Configuration for elastic training and fault tolerance."""
+
+  elastic_pause_resume: bool = Field(False, description="Whether to enable elastic pause and resume functionality.")
+  elastic_timeout_seconds: int = Field(3600, description="The timeout in seconds for elastic training operations.")
+  elastic_max_retries: int = Field(3, description="The maximum number of retries for elastic training operations.")
+  elastic_retry_interval_seconds: int = Field(60, description="The interval in seconds for elastic training retries.")
+
+
 class GcpMonitoring(BaseModel):
   """Configuration for GCP-specific workload monitoring."""
 
@@ -1901,6 +1910,7 @@ class MaxTextConfig(
     Checkpointing,
     OrbaxStorage,
     EmergencyCheckpointing,
+    ElasticTraining,
     # Data Types and Quantization
     DataTypes,
     Quantization,
