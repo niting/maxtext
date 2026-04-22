@@ -17,7 +17,7 @@ RL Trainer
 
 This module provides a unified `rl_train` function that consolidates the common
 RL training logic. It handles model loading, reward function setup, dataset
-processing, and training orchestration. By default, we run Group Relative Policy Optimization (GRPO) on 
+processing, and training orchestration. By default, we run Group Relative Policy Optimization (GRPO) on
 GSM8K math reasoning benchmark. The script is also flexible enough to run Group Sequence Policy Optimization (GSPO).
 
 Usage Examples:
@@ -108,8 +108,6 @@ def get_dataset(
         split=split,
         cache_dir=data_dir,
     )
-
-  template_config = load_data_template_from_file(tmvp_config.chat_template_path)
 
   loaded_dataset = (
       grain.MapDataset.source(data)
@@ -247,6 +245,40 @@ def prepare_datasets(trainer_config, model_tokenizer):
     template_config = load_data_template_from_file(
         trainer_config.chat_template_path
     )
+    def prepare_openinstructmath2_dataset(
+        split: str = "train_1M",
+        seed: int = 42,
+        test_size: float = 0.05,
+    ):
+      """Load and split the OpenMathInstruct-2 dataset into train and validation sets using HF's train_test_split."""
+      max_logging.log(
+          "WARNING: For reproducible experiments, preprocess the dataset once and "
+          "define your own HfDataset subclass that directly uses the preprocessed datasets."
+      )
+
+      # Load the original dataset
+      original_ds = datasets.load_dataset(
+          "parquet",
+          data_files={trainer_config.train_split: trainer_config.hf_train_files},
+          split=split,
+          cache_dir=train_data_dir,
+      )
+
+      # Split into train and validation sets using HF's train_test_split
+      split_ds = original_ds.train_test_split(test_size=test_size, seed=seed)
+
+      return {
+          "train": split_ds["train"],
+          "validation": split_ds["test"],
+      }
+
+    split_name = trainer_config.train_split if trainer_config.train_split != "train" else "train_1M"
+    splits = prepare_openinstructmath2_dataset(split=split_name)
+    template_config = load_data_template_from_file(trainer_config.chat_template_path)
+    if template_config is None:
+      raise ValueError(
+          f"Chat template is required for processing dataset but failed to load from {trainer_config.chat_template_path}"
+      )
 
     train_dataset = (
         grain.MapDataset.source(splits["train"])
@@ -449,7 +481,6 @@ def create_rl_components(
           rollout_vllm_model_version=trainer_config.tokenizer_path,
           rollout_vllm_hbm_utilization=trainer_config.hbm_utilization_vllm,
           rollout_vllm_tpu_backend_type="jax",
-          rollout_vllm_swap_space_size_gb=trainer_config.swap_space_vllm_gb,
           rollout_vllm_hf_config_path=trainer_config.vllm_hf_config_path,
           rollout_vllm_additional_config=rollout_additional_config,
           rollout_vllm_init_with_random_weights=True,
@@ -554,9 +585,11 @@ def create_rl_components(
         epsilon_high=trainer_config.rl.epsilon_high,
     )
     # Instantiate the custom MaxText chat parser
-    template_config = load_data_template_from_file(
-        trainer_config.chat_template_path
-    )
+    template_config = load_data_template_from_file(trainer_config.chat_template_path)
+    if template_config is None:
+      raise ValueError(
+          f"Chat template is required for AgenticGRPOLearner but failed to load from {trainer_config.chat_template_path}"
+      )
     chat_parser = utils_rl.MaxTextChatParser(
         model_tokenizer=model_tokenizer,
         template_config=template_config,
