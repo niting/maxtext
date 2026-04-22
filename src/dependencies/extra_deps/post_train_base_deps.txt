@@ -1,1 +1,1 @@
-google-tunix @ https://github.com/google/tunix/commit/432334f85551f2afb5620129d9a5c2f5cabce6ed.zip
+google-tunix @ git+https://github.com/google/tunix.git@fa8a5a6dc9a148baba974f73610c2c1f53e2944b
