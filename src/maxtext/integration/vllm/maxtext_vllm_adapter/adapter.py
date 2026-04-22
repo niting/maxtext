@@ -15,18 +15,16 @@
 """vLLM adapter for MaxText models."""
 
 import os
-import jax
-
 from flax import nnx
 import flax.linen as nn
+import jax
 from jax import numpy as jnp
 from jax.sharding import Mesh
-from maxtext.configs import pyconfig
-from maxtext.utils.globals import MAXTEXT_CONFIGS_DIR
 from maxtext.common.common_types import MODEL_MODE_AUTOREGRESSIVE
+from maxtext.configs import pyconfig
 from maxtext.utils import max_logging
 from maxtext.utils import model_creation_utils
-
+from maxtext.utils.globals import MAXTEXT_CONFIGS_DIR
 
 try:
   from tpu_inference.layers.common.attention_metadata import AttentionMetadata
@@ -40,7 +38,9 @@ except ImportError:
 from vllm.config import VllmConfig
 
 
-def generate_maxtext_config(vllm_config: VllmConfig, mesh: Mesh) -> pyconfig.HyperParameters:
+def generate_maxtext_config(
+    vllm_config: VllmConfig, mesh: Mesh
+) -> pyconfig.HyperParameters:
   """Generates a MaxText configuration from a vLLM configuration.
 
   This function takes a vLLM configuration object and translates relevant
@@ -67,7 +67,8 @@ def generate_maxtext_config(vllm_config: VllmConfig, mesh: Mesh) -> pyconfig.Hyp
   if vllm_config.load_config.load_format == "dummy":
     if overrides.get("load_parameters_path") is not None:
       max_logging.log(
-          "Warning: load_parameters_path is set when using dummy load format. Checkpoint loading will be skipped."
+          "Warning: load_parameters_path is set when using dummy load format."
+          " Checkpoint loading will be skipped."
       )
       overrides["load_parameters_path"] = None
 
@@ -77,7 +78,9 @@ def generate_maxtext_config(vllm_config: VllmConfig, mesh: Mesh) -> pyconfig.Hyp
 
   # Pad the number of KV heads if its less than the TP / EP size
   if isinstance(ShardingAxisName.ATTN_HEAD, tuple):
-    tp_sizes = [mesh.shape[axis_name] for axis_name in ShardingAxisName.ATTN_HEAD]
+    tp_sizes = [
+        mesh.shape[axis_name] for axis_name in ShardingAxisName.ATTN_HEAD
+    ]
     max_tp_size = max(tp_sizes)
   else:
     max_tp_size = mesh.shape[ShardingAxisName.ATTN_HEAD]
@@ -87,7 +90,9 @@ def generate_maxtext_config(vllm_config: VllmConfig, mesh: Mesh) -> pyconfig.Hyp
       and vllm_config.model_config.get_total_num_kv_heads() < max_tp_size
   ):
     max_logging.log(
-        f"Padding num_kv_heads from {vllm_config.model_config.get_total_num_kv_heads()} to {max_tp_size} to match tp_size."
+        "Padding num_kv_heads from"
+        f" {vllm_config.model_config.get_total_num_kv_heads()} to {max_tp_size}"
+        " to match tp_size."
     )
     overrides["base_num_kv_heads"] = max_tp_size
 
@@ -100,7 +105,8 @@ class MaxTextForCausalLM(nnx.Module):
 
   This class serves as the primary interface for integrating MaxText models
   into the vLLM serving framework, specifically for causal language modeling
-  tasks. It handles configuration generation, model initialization, and execution
+  tasks. It handles configuration generation, model initialization, and
+  execution
   of the decoding step.
   """
 
@@ -132,7 +138,10 @@ class MaxTextForCausalLM(nnx.Module):
       self.load_weights(rng_key)
 
     elif self.maxtext_config.load_parameters_path is None:
-      max_logging.log("Warning: No load_parameters_path provided. The model will be initialized with random weights.")
+      max_logging.log(
+          "Warning: No load_parameters_path provided. The model will be"
+          " initialized with random weights."
+      )
 
   def __call__(
       self,
@@ -165,9 +174,13 @@ class MaxTextForCausalLM(nnx.Module):
 
     # Ensure inputs are at least 2D with a batch dimension
     input_ids = jnp.expand_dims(input_ids, axis=1)
-    input_positions = jnp.expand_dims(attention_metadata.input_positions, axis=1)
+    input_positions = jnp.expand_dims(
+        attention_metadata.input_positions, axis=1
+    )
 
-    with self.mesh, nn.logical_axis_rules(self.maxtext_config.logical_axis_rules):
+    with self.mesh, nn.logical_axis_rules(
+        self.maxtext_config.logical_axis_rules
+    ):
       aux_hidden_states = []
       hidden, kv_caches = self.model(
           decoder_input_tokens=input_ids,
@@ -204,7 +217,9 @@ class MaxTextForCausalLM(nnx.Module):
     if not isinstance(self.model, nnx.Module):
       raise ValueError("Model is not initialized.")
 
-    with self.mesh, nn.logical_axis_rules(self.maxtext_config.logical_axis_rules):
+    with self.mesh, nn.logical_axis_rules(
+        self.maxtext_config.logical_axis_rules
+    ):
       return self.model.token_embedder.embedding
 
   def embed_input_ids(self, input_ids: jax.Array) -> jax.Array:
@@ -219,7 +234,9 @@ class MaxTextForCausalLM(nnx.Module):
     if not isinstance(self.model, nnx.Module):
       raise ValueError("Model is not initialized.")
 
-    with self.mesh, nn.logical_axis_rules(self.maxtext_config.logical_axis_rules):
+    with self.mesh, nn.logical_axis_rules(
+        self.maxtext_config.logical_axis_rules
+    ):
       return self.model.token_embedder(input_ids)
 
   def compute_logits(self, hidden_states: jax.Array) -> jax.Array:
@@ -234,12 +251,16 @@ class MaxTextForCausalLM(nnx.Module):
     if not isinstance(self.model, nnx.Module):
       raise ValueError("Model is not initialized.")
 
-    with self.mesh, nn.logical_axis_rules(self.maxtext_config.logical_axis_rules):
+    with self.mesh, nn.logical_axis_rules(
+        self.maxtext_config.logical_axis_rules
+    ):
       # Reshape to (num_tokens, 1, hidden_dim) for decoder output head
       y = jnp.expand_dims(hidden_states, axis=1)
 
       # Compute logits using the MaxText decoder's output head
-      logits = self.model.decoder.apply_output_head(self.model.token_embedder, y, True, self.model_mode)
+      logits = self.model.decoder.apply_output_head(
+          self.model.token_embedder, y, True, self.model_mode
+      )
 
       # Reshape back to (num_tokens, vocab_size)
       return logits.squeeze(1)
@@ -253,8 +274,13 @@ class MaxTextForCausalLM(nnx.Module):
     if self.model is not None:
       return
 
-    with self.mesh, nn.logical_axis_rules(self.maxtext_config.logical_axis_rules):
-      model, _ = model_creation_utils.create_nnx_model(
-          self.maxtext_config, mesh=self.mesh, model_mode=self.model_mode, rng_key=rng_key
+    with self.mesh, nn.logical_axis_rules(
+        self.maxtext_config.logical_axis_rules
+    ):
+      model, _ = model_creation_utils.from_pretrained(
+          self.maxtext_config,
+          mesh=self.mesh,
+          model_mode=self.model_mode,
+          rng_key=rng_key,
       )
       self.model = nnx.data(model)
